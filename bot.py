@@ -1,10 +1,17 @@
 import os
 import json
+import html
 import base64
 import asyncio
+import matplotlib
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from anthropic import Anthropic
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 
 TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
 ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
@@ -36,14 +43,41 @@ WEB_SEARCH_TOOL = {
     "name": "web_search"
 }
 
+FONT_PATH = os.path.join(matplotlib.get_data_path(), "fonts", "ttf", "DejaVuSans.ttf")
+pdfmetrics.registerFont(TTFont("DejaVuSans", FONT_PATH))
+
+def generate_pdf(text: str, filepath: str):
+    doc = SimpleDocTemplate(filepath, pagesize=A4)
+    styles = getSampleStyleSheet()
+    style = ParagraphStyle(
+        "Custom",
+        parent=styles["Normal"],
+        fontName="DejaVuSans",
+        fontSize=11,
+        leading=16,
+    )
+    story = []
+    for paragraph in text.split("\n"):
+        if paragraph.strip():
+            safe_text = html.escape(paragraph)
+            story.append(Paragraph(safe_text, style))
+            story.append(Spacer(1, 8))
+    doc.build(story)
+
 def extract_text(content_blocks):
     return "\n".join(block.text for block in content_blocks if block.type == "text")
+
+def wants_pdf(text: str) -> bool:
+    if not text:
+        return False
+    lowered = text.lower()
+    return "pdf" in lowered or "пдф" in lowered
 
 @dp.message(Command("start"))
 async def start_handler(message: types.Message):
     history[message.chat.id] = []
     save_history()
-    await message.answer("Привет! Я бот на Claude 🤖 Помню историю, умею фото и поиск в интернете.")
+    await message.answer("Привет! Я бот на Claude 🤖 Помню историю, умею фото, поиск в интернете и PDF.")
 
 @dp.message(Command("reset"))
 async def reset_handler(message: types.Message):
@@ -88,7 +122,13 @@ async def photo_handler(message: types.Message):
         reply = extract_text(response.content) or "Не получилось сформулировать ответ, попробуйте переформулировать вопрос."
         history[chat_id].append({"role": "assistant", "content": reply})
         save_history()
-        await message.answer(reply)
+
+        if wants_pdf(caption):
+            pdf_path = f"/tmp/{chat_id}_answer.pdf"
+            generate_pdf(reply, pdf_path)
+            await message.answer_document(types.FSInputFile(pdf_path), caption="Готово! 📄")
+        else:
+            await message.answer(reply)
     except Exception as e:
         await message.answer(f"Ошибка: {e}")
 
@@ -108,7 +148,13 @@ async def claude_handler(message: types.Message):
         reply = extract_text(response.content) or "Не получилось сформулировать ответ, попробуйте переформулировать вопрос."
         history[chat_id].append({"role": "assistant", "content": reply})
         save_history()
-        await message.answer(reply)
+
+        if wants_pdf(message.text):
+            pdf_path = f"/tmp/{chat_id}_answer.pdf"
+            generate_pdf(reply, pdf_path)
+            await message.answer_document(types.FSInputFile(pdf_path), caption="Готово! 📄")
+        else:
+            await message.answer(reply)
     except Exception as e:
         await message.answer(f"Ошибка: {e}")
 
