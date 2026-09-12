@@ -1,4 +1,5 @@
 import os
+import json
 import base64
 import asyncio
 from aiogram import Bot, Dispatcher, types
@@ -14,7 +15,21 @@ client = Anthropic(
     api_key=ANTHROPIC_API_KEY,
     base_url="https://claude-tokens.duckdns.org"
 )
-history = {}
+
+HISTORY_FILE = "history.json"
+
+def load_history():
+    if os.path.exists(HISTORY_FILE):
+        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return {int(k): v for k, v in data.items()}
+    return {}
+
+def save_history():
+    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+        json.dump(history, f, ensure_ascii=False)
+
+history = load_history()
 
 WEB_SEARCH_TOOL = {
     "type": "web_search_20250305",
@@ -22,17 +37,18 @@ WEB_SEARCH_TOOL = {
 }
 
 def extract_text(content_blocks):
-    """Собирает финальный текстовый ответ из всех текстовых блоков"""
     return "\n".join(block.text for block in content_blocks if block.type == "text")
 
 @dp.message(Command("start"))
 async def start_handler(message: types.Message):
     history[message.chat.id] = []
-    await message.answer("Привет! Я бот на Claude 🤖 Умею текст, фото и поиск в интернете.")
+    save_history()
+    await message.answer("Привет! Я бот на Claude 🤖 Помню историю, умею фото и поиск в интернете.")
 
 @dp.message(Command("reset"))
 async def reset_handler(message: types.Message):
     history[message.chat.id] = []
+    save_history()
     await message.answer("История очищена.")
 
 @dp.message(lambda m: m.photo is not None)
@@ -60,6 +76,7 @@ async def photo_handler(message: types.Message):
     ]
 
     history[chat_id].append({"role": "user", "content": user_content})
+    save_history()
 
     try:
         response = client.messages.create(
@@ -70,6 +87,7 @@ async def photo_handler(message: types.Message):
         )
         reply = extract_text(response.content)
         history[chat_id].append({"role": "assistant", "content": reply})
+        save_history()
         await message.answer(reply)
     except Exception as e:
         await message.answer(f"Ошибка: {e}")
@@ -79,6 +97,7 @@ async def claude_handler(message: types.Message):
     chat_id = message.chat.id
     history.setdefault(chat_id, [])
     history[chat_id].append({"role": "user", "content": message.text})
+    save_history()
     try:
         response = client.messages.create(
             model="claude-sonnet-4-6",
@@ -88,6 +107,7 @@ async def claude_handler(message: types.Message):
         )
         reply = extract_text(response.content)
         history[chat_id].append({"role": "assistant", "content": reply})
+        save_history()
         await message.answer(reply)
     except Exception as e:
         await message.answer(f"Ошибка: {e}")
