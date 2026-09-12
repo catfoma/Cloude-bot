@@ -81,11 +81,11 @@ async def photo_handler(message: types.Message):
     try:
         response = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=1024,
+            max_tokens=2048,
             messages=history[chat_id],
             tools=[WEB_SEARCH_TOOL]
         )
-        reply = extract_text(response.content)
+        reply = extract_text(response.content) or "Не получилось сформулировать ответ, попробуйте переформулировать вопрос."
         history[chat_id].append({"role": "assistant", "content": reply})
         save_history()
         await message.answer(reply)
@@ -101,11 +101,11 @@ async def claude_handler(message: types.Message):
     try:
         response = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=1024,
+            max_tokens=2048,
             messages=history[chat_id],
             tools=[WEB_SEARCH_TOOL]
         )
-        reply = extract_text(response.content)
+        reply = extract_text(response.content) or "Не получилось сформулировать ответ, попробуйте переформулировать вопрос."
         history[chat_id].append({"role": "assistant", "content": reply})
         save_history()
         await message.answer(reply)
